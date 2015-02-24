@@ -139,8 +139,7 @@ def upload(previous_id, original_id, jsonstr, title, URLs, files, iterations):
             download_and_upload_files(new_item_id, original_id, URLs, files)
         except:
             logger.error('********* FAILED TO UPLOAD: \n%s\n%s\n%s', item_to_upload, response, content)
-
-
+       
 
 class XlsxMapping:
     """Keep track of all the mapping stuff from spreadsheet to Omeka"""
@@ -347,6 +346,9 @@ for d in data:
                                 element_text["html"] = True
                                 logger.info("Uploading HTML %s, %s, %s", key, value, element_text["text"])
                             elif property_id <> None:
+                                to_title =  mapping.id_to_title[value]
+                                if to_title == None:
+                                    to_title =  mapping.id_to_omeka_id[value]
                                 logger.info("Relating this item to item %d (%s)", object_id, to_title)
                                 relations.append((property_id, object_id))
                             else:

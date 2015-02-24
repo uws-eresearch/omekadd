@@ -17,10 +17,17 @@ args = vars(parser.parse_args())
 endpoint = args['api_url'] if args['api_url'] <> None else config['api_url']
 apikey   = args['key'] if args['api_url'] <> None else config['key']
 omeka_client = OmekaClient(endpoint.encode("utf-8"), logger, apikey)
+deleted = {}
 for to_delete in ["items", "collections"]:
     logger.info('Deleting all %s', to_delete)
     resp, cont = omeka_client.get(to_delete)
     items = json.loads(cont)
+    count = 0
     for item in items:
         logger.info('Deleting %s: %s', to_delete, item['id'])
         omeka_client.delete(to_delete, item['id'])
+        count += 1
+    deleted[to_delete] = count
+
+for d in deleted:
+    logger.info('Deleted %d %s', deleted[d], d)

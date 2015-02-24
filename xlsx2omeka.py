@@ -11,12 +11,12 @@ import urlparse
 from omekaclient import OmekaClient
 from omekautils import get_omeka_config
 from omekautils import create_stream_logger
+from omekautils import create_file_logger
 
 
 
 """ Uploads an entire spreadsheet to an Omeka server """
 
-logger = create_stream_logger('xlxx2omeka', stdout)
 
 # Define and parse command-line arguments
 parser = argparse.ArgumentParser()
@@ -31,10 +31,15 @@ parser.add_argument('-f', '--featured', action='store_true', help='Make items fe
 parser.add_argument('-c', '--create_collections', action='store_true', help='Auto-create missing collections')
 parser.add_argument('-e', '--create_elements', action='store_true', help='Auto-create missing element types')
 parser.add_argument('-y', '--create_item_types', action='store_true', help='Auto-create missing Item Types')
+parser.add_argument('-l', '--logfile', default=None, help='send log messages to the named logfile')
 parser.add_argument('-q', '--quietly', action='store_true', help='Only log errors and warnings not the constant stream of info')
 args = vars(parser.parse_args())
 
-
+if args['logfile'] == None:
+    logger = create_stream_logger('xlxx2omeka', stdout) 
+else:
+    logger = create_file_logger('xlsx2omeka', args['logfile'], mode='w')
+    
 config = get_omeka_config()
 endpoint = args['api_url'] if args['api_url'] <> None else config['api_url']
 apikey   = args['key'] if args['api_url'] <> None else config['key']
@@ -43,6 +48,7 @@ inputfile = args['inputfile']
 identifier_column = args['identifier']
 title_column = args['title']
 data_dir = args['download_cache']
+
 if args["quietly"]:
     logger.setLevel(30)
 
@@ -92,7 +98,7 @@ def download_and_upload_files(new_item_id, original_id, URLs, files):
     for fyle in files:
         logger.warning("Uploading %s", fyle)
         try:
-            print omeka_client.post_file_from_filename(fyle, new_item_id )
+            omeka_client.post_file_from_filename(fyle, new_item_id )
             
             logger.info("Uploaded %s", fyle)
         except:
@@ -126,16 +132,15 @@ def upload(previous_id, original_id, jsonstr, title, URLs, files, iterations):
             logger.info("New ID %s", new_item_id)
             
             for (property_id, object_id) in relations:
+                logger.debug("*** adding item relation from item %s to object %s, via property %s", new_item_id, object_id, property_id)
                 omeka_client.addItemRelation(new_item_id, property_id, object_id)
+                logger.debug("*** done")
 
             download_and_upload_files(new_item_id, original_id, URLs, files)
         except:
             logger.error('********* FAILED TO UPLOAD: \n%s\n%s\n%s', item_to_upload, response, content)
 
 
-
-
-       
 
 class XlsxMapping:
     """Keep track of all the mapping stuff from spreadsheet to Omeka"""
@@ -195,6 +200,7 @@ class XlsxMapping:
                             prefix, label = relation.split(":")
                             relation_id = omeka_client.getRelationPropertyId(prefix,label)
                             self.related_fields[collection][column] = relation_id
+                            logger.error("*** related_fields[%s][%s] = %s:%s = %d", collection, column, prefix, label, relation_id)
                         
                     if omeka_element <> None and column <> None and collection <> None:
                         if not collection in self.collection_field_mapping:
@@ -325,7 +331,7 @@ for d in data:
                             stuff_to_upload = True
                     else:
                         if mapping.has_map(collection_name, key):
-                            print collection_name, key
+                            logger.debug("Collection: %s, Key: %s", collection_name, key)
                             if  mapping.collection_field_mapping[collection_name][key] <> None:
                                 element_text = {"html": False, "text": "none"} #, "element_set": {"id": 0}}
                                 element_text["element"] = {"id": mapping.collection_field_mapping[collection_name][key] }
@@ -341,7 +347,7 @@ for d in data:
                                 element_text["html"] = True
                                 logger.info("Uploading HTML %s, %s, %s", key, value, element_text["text"])
                             elif property_id <> None:
-                                logger.info("Relating this item to another")
+                                logger.info("Relating this item to item %d (%s)", object_id, to_title)
                                 relations.append((property_id, object_id))
                             else:
                                 try: # Have had some encoding problems - not sure if this is still needed
